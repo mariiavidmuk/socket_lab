@@ -1,20 +1,25 @@
 import socket
 
-sock = socket.socket()
-sock.connect(('localhost', 9090))
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(('localhost', 123))
 while (True):
     try:
-        x = input("Enter the first number: ")
-        x = bytes(x, "utf-8")
-        y = input("Enter the second number: ")
-        y = bytes(y, "utf-8")
+        x = int(input("Enter the first number: "))
+        x = bytes(str(x), "utf-8")
+        y = int(input("Enter the second number: "))
+        y = bytes(str(y), "utf-8")
         oper = input("Enter the operation: ")
+        if oper != '+' and oper != '-' and oper != '*' and oper != '/':
+            print("Wrong input")
+            sock.close()
+            break
         oper = bytes(oper, "utf-8")
         sock.send(x)
         sock.send(y)
         sock.send(oper)
         result = sock.recv(1024).decode()
         print("The answer is:", result)
-
     except:
+        print("Wrong input")
         sock.close()
+        break

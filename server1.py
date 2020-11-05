@@ -2,34 +2,31 @@ import select
 import socket
 
 global dat
-SERVER_ADDRESS = ('localhost', 8686)
+SERVER = ('localhost', 8686)
 global array
 array = []
 global res
 res = 0
-# Говорит о том, сколько дескрипторов единовременно могут быть открыты
-MAX_CONNECTIONS = 10
-
-# Откуда и куда записывать информацию
-INPUTS = list()
-OUTPUTS = list()
+MAX = 10
+input = list()
+output = list()
 
 
-def get_non_blocking_server_socket():
+def create_server():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setblocking(0)
-    server.bind(SERVER_ADDRESS)
-    server.listen(MAX_CONNECTIONS)
+    server.bind(SERVER)
+    server.listen(MAX)
 
     return server
 
 
-def handle_readables(readables, server):
+def accept_clients(readables, server):
     for resource in readables:
         if resource is server:
             connection, client_address = resource.accept()
             connection.setblocking(0)
-            INPUTS.append(connection)
+            input.append(connection)
             print("new connection from {address}".format(address=client_address))
         else:
             data = ""
@@ -38,7 +35,6 @@ def handle_readables(readables, server):
                 data = resource.recv(1024)
                 data = data.decode("utf-8")
                 array.append(data)
-                print(array)
                 a = ""
                 for i in range(len(array)):
                     a += array[i]
@@ -62,53 +58,57 @@ def handle_readables(readables, server):
                         res = x * y
                     if oper == "/":
                         res = x / y
-
+                    if res == 0:
+                        resource.send(str(res).encode())
+                    x = ""
+                    y = ""
+                    array = []
+                if len(array) > 5:
                     array = []
             except ConnectionResetError:
                 pass
 
             if data:
 
-                if resource not in OUTPUTS:
-                    OUTPUTS.append(resource)
+                if resource not in output:
+                    output.append(resource)
 
 
             else:
 
-                clear_resource(resource)
+                delete(resource)
 
 
-def clear_resource(resource):
-    if resource in OUTPUTS:
-        OUTPUTS.remove(resource)
-    if resource in INPUTS:
-        INPUTS.remove(resource)
+def delete(resource):
+    if resource in output:
+        output.remove(resource)
+    if resource in input:
+        input.remove(resource)
     resource.close()
 
     print('closing connection ' + str(resource))
 
 
-def handle_writables(writables):
+def send_result(writables):
     for resource in writables:
         try:
             global res
-            resource.send(str(res).encode())
-
-            res= 0
+            if res != 0:
+                global array
+                resource.send(str(res).encode())
+                res = 0
+                array = []
         except OSError:
-            clear_resource(resource)
+            delete(resource)
 
 
 if __name__ == '__main__':
-    server_socket = get_non_blocking_server_socket()
-    INPUTS.append(server_socket)
-
-    print("server is running, please, press ctrl+c to stop")
+    server = create_server()
+    input.append(server)
     try:
-        while INPUTS:
-            readables, writables, exceptional = select.select(INPUTS, OUTPUTS, INPUTS)
-            handle_readables(readables, server_socket)
-            handle_writables(writables)
+        while input:
+            read, write, exception = select.select(input, output, input)
+            accept_clients(read, server)
+            send_result(write)
     except KeyboardInterrupt:
-        clear_resource(server_socket)
-        print("Server stopped! Thank you for using!")
+        delete(server)
